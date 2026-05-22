@@ -31,18 +31,18 @@ int main(void)
   // and assume we will process each element of d_x
   // with a different thread
   //@@ Choose some values here, stick to 1D
-  int threadsPerBlock = 32;  // FIXME
-  int blocksPerGrid = 4;  // FIXME
+  int threadsPerBlock = 256;
+  int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
 
   // Array allocation on device
   // @@ Use cudaMalloc to perform the allocation.
-  cudaMalloc(???); // FIXME
+  cudaMalloc((void**)&d_x, N * sizeof(float));
   cudaCheckError();
  
   // Initialize the x and y arrays on the device
   const float firstValue = 1.f;
   //@@ Call the fill1D kernel to fill d_x with `firstValue`, see kernels.h for the API
-  //@@ fill1D<<<???, ???>>>(???);  // FIXME
+  fill1D<<<blocksPerGrid, threadsPerBlock>>>(d_x, firstValue, N);
   // Wait for GPU to finish and check for errors
   cudaDeviceSynchronize();
   cudaCheckError();
@@ -50,18 +50,17 @@ int main(void)
   // Check for errors on device
   float expectedValue = firstValue;
   //@@ Call the check1D kernel to control device memory content, see kernels.h for API
-  //@@ check1D<<<?? ,???>>>(???);  // FIXME
+  check1D<<<blocksPerGrid, threadsPerBlock>>>(d_x, expectedValue, N);
   // Wait for GPU to finish and check for errors
-  //@@ call CUDA device synchronisation function
-  //@@ ???
+  cudaDeviceSynchronize();
   cudaCheckError();
 
   // Copy back the buffer to the host for inspection:
   //@@ Allocate a buffer on the host
-  //@@ float *h_x = (float*) std::malloc(???);  //FIXME
+  float *h_x = (float*) std::malloc(N * sizeof(float));
   //@@ Copy the buffer content from device to host
-  //@@ use cudaMemcpy
-  //@@ cudaMemcpy(???);  // FIXME
+  // Copy device -> host
+  cudaMemcpy(h_x, d_x, N * sizeof(float), cudaMemcpyDeviceToHost);
   cudaCheckError();
 
   // Check for errors (all values should be close to `firstValue`)
@@ -71,24 +70,22 @@ int main(void)
   // Now increment the array values by some other value
   const float otherValue = 10.f;
   //@@ Call the inc1D kernel to add `otherValue` to all values of our buffer, see kernels.h for API
-  //@@ inc1D<<<???, ???>>>(???);
+  inc1D<<<blocksPerGrid, threadsPerBlock>>>(d_x, otherValue, N);
   // Wait for GPU to finish
-  //@@ call CUDA device synchronisation function
-  //@@ ???
+  cudaDeviceSynchronize();
   cudaCheckError();
 
   // Check for errors on device
   expectedValue = firstValue + otherValue;
   //@@ Call the check1D kernel to control device memory content, see kernels.h for API
-  //@@ check1D<<<?? ,???>>>(???);  // FIXME
+  check1D<<<blocksPerGrid, threadsPerBlock>>>(d_x, expectedValue, N);
   // Wait for GPU to finish and check for errors
-  //@@ call CUDA device synchronisation function
-  //@@ ???
+  cudaDeviceSynchronize();
   cudaCheckError();
 
   // Copy back the buffer to the host for inspection:
   //@@ Copy the buffer content from device to host (reuse previous buffer)
-  //@@ cudaMemcpy(????);  // FIXME
+  cudaMemcpy(h_x, d_x, N * sizeof(float), cudaMemcpyDeviceToHost);
   cudaCheckError();
 
   // Check for errors (all values should be close to `firstValue+otherValue`)
@@ -97,7 +94,8 @@ int main(void)
 
   // Free memory
   //@@ free d_h using CUDA primitives 
-  //@@ cuda???
+  // Free device memory
+  cudaFree(d_x);
   cudaCheckError();
   std::free(h_x);
 
